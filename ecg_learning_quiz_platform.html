@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full bg-slate-900">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECG 臨床心電圖沉浸式學習與互動測驗系統</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti for Game Victory -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        medical: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            800: '#115e59',
+                            900: '#134e4a',
+                        }
+                    },
+                    animation: {
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'bounce-short': 'bounce 0.5s ease-in-out 2',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        /* Grid overlay background for ECG feel */
+        .ecg-grid-bg {
+            background-size: 20px 20px;
+            background-image: 
+                linear-gradient(to right, rgba(239, 68, 68, 0.1) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(239, 68, 68, 0.1) 1px, transparent 1px);
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col text-slate-100 bg-slate-900 font-sans antialiased selection:bg-teal-500 selection:text-white">
+
+    <!-- Header / Navbar -->
+    <header class="bg-slate-800/90 backdrop-blur border-b border-slate-700/80 sticky top-0 z-40 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
+            <!-- Brand Logo -->
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-400 shadow-inner">
+                    <i class="fa-solid fa-heart-pulse text-xl animate-pulse"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-wide text-white flex items-center gap-2">
+                        ECG 臨床心電圖學習平台
+                        <span class="text-xs font-normal px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30">Ver.1151A</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">心電圖判讀 • 臨床情境 • 考題實戰</p>
+                </div>
+            </div>
+
+            <!-- Stats Header Quick View -->
+            <div class="hidden md:flex items-center space-x-6 text-sm bg-slate-950/50 px-4 py-1.5 rounded-xl border border-slate-800">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-fire text-amber-500"></i>
+                    <span class="text-slate-400">最高連勝:</span>
+                    <span id="stat-max-streak" class="font-bold text-amber-400">0</span>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-book-bookmark text-rose-400"></i>
+                    <span class="text-slate-400">錯題庫:</span>
+                    <span id="stat-mistakes-count" class="font-bold text-rose-400">0</span>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="flex space-x-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
+                <button id="btn-study-mode" onclick="switchTab('study')" class="px-3.5 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-teal-600 text-white shadow-sm">
+                    <i class="fa-solid fa-book-open text-xs"></i>
+                    <span>圖庫解析</span>
+                </button>
+                <button id="btn-quiz-mode" onclick="switchTab('quiz')" class="px-3.5 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2 text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-gamepad text-xs"></i>
+                    <span>情境測驗</span>
+                </button>
+                <button id="btn-mistakes-mode" onclick="switchTab('mistakes')" class="px-3.5 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2 text-slate-400 hover:text-white relative">
+                    <i class="fa-solid fa-circle-exclamation text-xs text-rose-400"></i>
+                    <span>錯題專區</span>
+                    <span id="badge-mistake-count" class="hidden absolute -top-1 -right-1 bg-rose-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">0</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 overflow-y-auto custom-scrollbar">
+
+        <!-- ================= 1. 圖庫學習與重點解析 SECTION ================= -->
+        <section id="study-section" class="space-y-6">
+            <!-- Search, Category & Filter Bar -->
+            <div class="bg-slate-800/60 backdrop-blur p-4 rounded-2xl border border-slate-700/60 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg">
+                <!-- Search Box -->
+                <div class="relative w-full md:w-80">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="search-input" oninput="filterStudyCards()" placeholder="搜尋疾病名稱、關鍵字..." 
+                           class="w-full pl-10 pr-4 py-2 bg-slate-900/80 border border-slate-700 rounded-xl focus:ring-2 focus:ring-teal-500 focus:outline-none text-sm text-slate-200 placeholder-slate-500">
+                </div>
+
+                <!-- Category Filter Pills -->
+                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto" id="category-pills">
+                    <!-- Dynamic Pills -->
+                </div>
+
+                <div class="text-xs text-slate-400 font-medium whitespace-nowrap">
+                    共收錄 <span id="total-count" class="text-teal-400 font-bold text-sm">0</span> 張心電圖與重點解析
+                </div>
+            </div>
+
+            <!-- ECG Cards Grid -->
+            <div id="study-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Cards populated dynamically by JS -->
+            </div>
+        </section>
+
+
+        <!-- ================= 2. 情境測驗與遊戲化 SECTION ================= -->
+        <section id="quiz-section" class="hidden max-w-4xl mx-auto space-y-6">
+            
+            <!-- Quiz Card Panel -->
+            <div class="bg-slate-800/80 rounded-2xl border border-slate-700/80 shadow-2xl overflow-hidden flex flex-col">
+                
+                <!-- Quiz Header Bar (Timer & Score) -->
+                <div class="bg-slate-950/80 border-b border-slate-700/80 p-4 flex flex-wrap justify-between items-center gap-3">
+                    <div class="flex items-center space-x-3">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                            進度: <span id="quiz-current-num" class="text-teal-400 text-sm font-bold">1/34</span>
+                        </span>
+                        <!-- Streak Badge -->
+                        <div id="streak-container" class="hidden items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold animate-bounce-short">
+                            <i class="fa-solid fa-fire text-amber-500"></i>
+                            <span id="quiz-streak-count">0</span> 連勝中!
+                        </div>
+                    </div>
+
+                    <!-- Countdown Timer -->
+                    <div class="flex items-center space-x-2 bg-slate-900 px-3 py-1 rounded-lg border border-slate-700">
+                        <i class="fa-regular fa-clock text-teal-400 animate-spin-slow"></i>
+                        <span class="text-xs text-slate-400">剩餘時間:</span>
+                        <span id="quiz-timer" class="font-mono font-bold text-teal-300">20s</span>
+                    </div>
+
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm text-slate-300">總得分: <span id="quiz-score" class="font-bold text-emerald-400 text-base">0</span></span>
+                        <button onclick="resetQuiz()" class="text-xs text-slate-400 hover:text-white underline transition">重新測驗</button>
+                    </div>
+                </div>
+
+                <!-- Quiz Main Body -->
+                <div class="p-6 space-y-6">
+                    
+                    <!-- ECG Image Container with Grid Feel -->
+                    <div class="relative bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center min-h-[220px] max-h-[340px] group ecg-grid-bg">
+                        <img id="quiz-image" src="" alt="ECG Quiz" class="max-h-[320px] w-auto object-contain cursor-pointer transition duration-300 group-hover:scale-105" onclick="openModal(this.src)">
+                        <div class="absolute bottom-2 right-2 bg-slate-900/80 backdrop-blur px-2.5 py-1 rounded-md text-[11px] text-slate-400 border border-slate-700 pointer-events-none">
+                            <i class="fa-solid fa-magnifying-glass-plus mr-1"></i>點擊放大
+                        </div>
+                    </div>
+
+                    <!-- Clinical Vignette Case Scenario -->
+                    <div class="bg-slate-900/90 p-4 rounded-xl border border-teal-500/20 space-y-1">
+                        <div class="flex items-center space-x-2 text-teal-400 text-xs font-semibold uppercase tracking-wider">
+                            <i class="fa-solid fa-user-doctor"></i>
+                            <span>臨床病例主訴 (Clinical Vignette)</span>
+                        </div>
+                        <p id="quiz-scenario" class="text-sm md:text-base text-slate-200 font-medium leading-relaxed">
+                            載入中...
+                        </p>
+                    </div>
+
+                    <h3 class="text-sm font-bold text-slate-300 tracking-wide uppercase">請依心電圖與病例，選擇最適當的診斷：</h3>
+
+                    <!-- Options Grid -->
+                    <div id="quiz-options" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <!-- Dynamic options buttons -->
+                    </div>
+
+                    <!-- Result & Explanation Feedback Banner -->
+                    <div id="quiz-feedback" class="hidden p-5 rounded-xl space-y-3 transition border">
+                        <div id="quiz-feedback-title" class="font-bold text-base flex items-center gap-2"></div>
+                        <div id="quiz-feedback-explain" class="text-sm leading-relaxed text-slate-300 bg-slate-950/40 p-3 rounded-lg border border-slate-700/50"></div>
+                    </div>
+                </div>
+
+                <!-- Quiz Footer Controls -->
+                <div class="bg-slate-950/80 border-t border-slate-700/80 p-4 flex justify-between items-center">
+                    <span id="quiz-progress-text" class="text-xs text-slate-400">請選取一個答案開始作答</span>
+                    <button id="btn-next-question" onclick="nextQuestion()" disabled
+                            class="px-6 py-2.5 bg-teal-600 text-white rounded-xl opacity-50 cursor-not-allowed hover:bg-teal-500 transition font-medium shadow-md flex items-center space-x-2">
+                        <span>下一題</span>
+                        <i class="fa-solid fa-arrow-right text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ================= 3. 錯題專區 SECTION ================= -->
+        <section id="mistakes-section" class="hidden space-y-6">
+            <div class="bg-slate-800/60 p-6 rounded-2xl border border-slate-700/60 shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
+                        個人錯題複習庫
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-1">系統自動為您收集作答錯誤的題目，方便針對弱點加強與觀念複習。</p>
+                </div>
+                <div class="flex space-x-3">
+                    <button id="btn-quiz-mistakes" onclick="startMistakesQuiz()" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-sm font-medium rounded-xl transition shadow flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-circle-play"></i>
+                        <span>錯題重新測驗</span>
+                    </button>
+                    <button onclick="clearMistakes()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium rounded-xl transition">
+                        清空錯題
+                    </button>
+                </div>
+            </div>
+
+            <!-- Mistakes Grid Container -->
+            <div id="mistakes-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Dynamically added mistakes cards -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal for Enlarged ECG View & Full Details -->
+    <div id="image-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 hidden flex items-center justify-center p-4 transition-all" onclick="closeModal()">
+        <div class="relative max-w-5xl w-full bg-slate-900 border border-slate-700 p-3 md:p-4 rounded-2xl overflow-hidden shadow-2xl space-y-3" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-center px-2">
+                <h3 id="modal-title" class="text-base font-bold text-teal-300">心電圖細節檢視</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white bg-slate-800 w-8 h-8 rounded-full flex items-center justify-center text-sm">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="bg-slate-950 rounded-xl overflow-auto max-h-[70vh] border border-slate-800 flex items-center justify-center p-2 custom-scrollbar ecg-grid-bg">
+                <img id="modal-img" src="" alt="Enlarged ECG" class="max-w-full h-auto object-contain">
+            </div>
+
+            <div id="modal-features-box" class="bg-slate-800/80 p-3 rounded-xl border border-slate-700/80 text-xs md:text-sm text-slate-300 hidden">
+                <span class="font-bold text-teal-400 block mb-1">判讀焦點：</span>
+                <p id="modal-features-text" class="leading-relaxed"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // 完整 34 筆 ECG 資料庫，補全「判讀核心特徵」與「臨床情境病例」
+        const ecgData = [
+{
+    id: 1, 
+    image: "2：1房空間傳導阻斷.webp", 
+    tw: "2:1 房室傳導阻滯", 
+    en: "2:1 AV Block", 
+    category: "傳導異常",
+    features: "每 2 個 P 波僅有 1 個成功下傳至心室引起 QRS 波。PR 間期在下傳的心搏中保持固定，無法直接歸類為 Mobitz Type I 或 Mobitz Type II，需要持續監測心律變化以確立進階分級。",
+    vignette: "68歲男性，近一週於步行運動時反覆感到頭暈與疲倦。"
+},
+            {
+    id: 2, 
+    image: "下壁心肌梗塞.webp", 
+    tw: "急性下壁心肌梗塞", 
+    en: "Acute Inferior Myocardial Infarction (Inferior STEMI)", 
+    category: "心肌梗塞/缺血",
+    features: "肢體導程 II、III、aVF 出現明顯的 ST 段上升（ST-segment elevation），且在高側壁導程 I、aVL 出現鏡像壓低（reciprocal ST depression）。胸前導程 V2-V4 亦可見顯著 ST 段上升，提示可能合併右心室或前壁波及。",
+    vignette: "62歲男性，因突發性持續性胸悶、胸痛伴隨大汗淋漓 2 小時被送至急診。疼痛放射至左肩與下顎。"
+},
+            {
+    id: 3, 
+    image: "心房性撲動.webp", 
+    tw: "心房撲動", 
+    en: "Atrial Flutter (AFL)", 
+    category: "心房性心律不整",
+    features: "等電位線消失，出現規律且呈鋸齒狀的撲動波（Flutter waves / F waves）。心房速率通常約在 250–350 bpm 之間，房室傳導比例多為固定（如 2:1 或 4:1 傳導）或可變傳導。",
+    vignette: "55歲女性，因感覺突發性心悸、胸痛與輕微呼吸急促至門診就診。"
+},
+            {
+    id: 4, 
+    image: "心房性纖維顫動.webp", 
+    tw: "心房顫動", 
+    en: "Atrial Fibrillation (AF / AFib)", 
+    category: "心房性心律不整",
+    features: "正常 P 波消失，代之以不規則的細微顫動波（f waves）。R-R 間期完全不規則（Irregularly irregular），且 QRS 波群形態通常保持狹窄正常。",
+    vignette: "72歲男性，有高血壓病史，因感到持續性心悸、胸慌與運動耐受力下降而前來就醫。診查發現心音強弱不一且節律完全不規則。"
+},
+            {
+    id: 5, 
+    image: "心房期外收縮.webp", 
+    tw: "心房過早收縮 / 心房期前收縮", 
+    en: "Premature Atrial Complex (PAC)", 
+    category: "心房性心律不整",
+    features: "提早出現的 P 波（P' 波），其形態與正常的竇性 P 波不同。提早出現的 P 波後方跟著形態正常的狹窄 QRS 波群，且後面接續不完全性代償間歇（Incomplete compensatory pause）。",
+    vignette: "45歲女性，近期因工作壓力大且頻繁飲用黑咖啡，感覺偶爾會有「心臟突然漏跳一拍」或「突然重跳一下」的感覺。"
+},
+            {
+    id: 6, 
+    image: "心房撲動（atrial flutter）.webp", 
+    tw: "心房撲動", 
+    en: "Atrial Flutter (AFL)", 
+    category: "心房性心律不整",
+    features: "下壁導程（II, III, aVF）可見極為標準且連續出現的鋸齒狀撲動波（Sawtooth flutter waves / F waves）。基線等電位線消失，房室傳導比例呈固定比例傳導（如 2:1 或 4:1 傳導）或可變傳導下傳至心室。",
+    vignette: "58歲男性，有長期高血壓與慢性阻塞性肺病（COPD）病史，因近數天活動時自覺心悸、頭暈及胸口發悶前來診所。"
+},
+            {
+    id: 7, 
+    image: "心房顫動 （atrial fibrillation）.webp", 
+    tw: "心房顫動", 
+    en: "Atrial Fibrillation (AF / AFib)", 
+    category: "心房性心律不整",
+    features: "12 導程心電圖顯示正常的竇性 P 波消失，代之以不規則且快速顫動的 f 波（在 V1-V3 導程尤為顯著）。R-R 間期呈現完全不規則（Irregularly irregular），且 QRS 波群形態維持狹窄正常。",
+    vignette: "69歲女性，有冠狀動脈疾病與高血壓病史，因近一週頻繁出現突發性心悸、呼吸急促及疲律不適至急診就醫。"
+},
+            { 
+                id: 8, 
+                image: "心軸極度右偏.webp", 
+                tw: "心軸極度右偏", 
+                en: "Extreme Right Axis Deviation", 
+                category: "心軸波型",
+                features: "心軸介於 -90° 至 ±180° 之間（NW field），導程 I 與 aVF 之 QRS 主要波形皆向下。",
+                vignette: "先天性心臟病患者檢查。"
+            },
+            { 
+                id: 9, 
+                image: "心室性期外收縮（ventricular extrasystole）.webp", 
+                tw: "心室早期收縮", 
+                en: "Ventricular Extrasystole (PVC)", 
+                category: "心律不整",
+                features: "提前出現寬大畸形的 QRS 波 (時程 >0.12s)，前無相關 P 波，後通常跟隨完全代償間歇。",
+                vignette: "50歲男性，體檢心電圖發現偶發性、出現異常波群。"
+            },
+            { 
+                id: 10, 
+                image: "心室顫動（ventricular fibrillation）.webp", 
+                tw: "心室顫動", 
+                en: "Ventricular Fibrillation", 
+                category: "致命性心律不整",
+                features: "P-QRS-T 完全消失，代之以無規律、大小不一的快速心室顫動波，為心臟驟停的致命波形。",
+                vignette: "急診室一位冠心病患者突然意識喪失、無脈搏。"
+            },
+ {
+        id: 11, 
+        image: "心跳規律上心室頻脈 (supraventricular tachycardia).webp", 
+        tw: "陣發性上心室頻脈", 
+        en: "Paroxysmal Supraventricular Tachycardia (PSVT)", 
+        category: "心房性心律不整",
+        features: "心室節律非常規律且急速（心率約在 150–250 bpm 之間）。QRS 波群呈狹窄正常形態，P 波常埋藏於 QRS 波群內或緊接其後（逆向 P 波），導致 PR 間期無法清晰辨識。",
+        vignette: "28歲女性，無已知心臟病史，因突發性劇烈心悸、胸口發緊與輕微頭暈 30 分鐘前來急診。"
+    },
+    {
+        id: 12, 
+        image: "右心室肥大.webp", 
+        tw: "右心室肥大", 
+        en: "Right Ventricular Hypertrophy (RVH)", 
+        category: "心室結構異常",
+        features: "胸前導程 V1 出現高的 R 波（R/S 比值 > 1），V5–V6 呈現深 S 波。同時伴隨心軸右偏（Right axis deviation）以及右胸導程（V1–V2）ST-T 變異（右心室應變波形 Strain pattern）。",
+        vignette: "52歲男性，為長期慢性阻塞性肺病（COPD）患者，近半個月來出現雙下肢水腫及漸進性呼吸困難。"
+    },
+    {
+        id: 13, 
+        image: "右束支傳導阻斷.webp", 
+        tw: "完全性右束支傳導阻斷", 
+        en: "Complete Right Bundle Branch Block (CRBBB)", 
+        category: "傳導異常",
+        features: "QRS 波群時限延長（≥ 0.12 秒）。右胸導程 V1–V3 呈現典型的 rsR' 或「兔耳波（Rabbit ears）」形態；側壁導程（I, aVL, V5–V6）則可見寬大且淺的 S 波。",
+        vignette: "65歲女性，於例行體檢時進行心電圖檢查，本身無明顯胸痛或心悸症狀。"
+    },
+    {
+        id: 14, 
+        image: "右束支傳導阻斷B.webp", 
+        tw: "完全性右束支傳導阻斷", 
+        en: "Complete Right Bundle Branch Block (CRBBB)", 
+        category: "傳導異常",
+        features: "QRS 波群時限寬大（≥ 0.12 秒）。V1 導程顯示典型 rsR' 雙峰結構，V5–V6 與 Lead I 出現特徵性的寬深 S 波（Slurred S wave），T 波方向在右胸導程與 QRS 主波相反。",
+        vignette: "70歲男性，有高血壓及心肌病史。"
+    },
+    {
+        id: 15, 
+        image: "左心室肥大.webp", 
+        tw: "左心室肥大", 
+        en: "Left Ventricular Hypertrophy (LVH)", 
+        category: "心室結構異常",
+        features: "符合 Sokolow-Lyon 標準：V1 的 S 波深度 + V5 (或 V6) 的 R 波高度 > 35 mm（3.5 mV），或 aVL 的 R 波 > 11 mm。左側胸前導程（V5, V6）常伴隨 ST 段壓低與 T 波倒置（左心室應變波形 Strain pattern）。",
+        vignette: "60歲男性，有長達 15 年未規律服藥控制的高血壓病史，因活動後喘與頭痛就診。"
+    },
+    {
+        id: 16, 
+        image: "左右手的誘導電極用反.webp", 
+        tw: "左右手電極接反（肢體導程誤接）", 
+        en: "Left/Right Arm Lead Reversal (LA/RA Cable Reversal)", 
+        category: "技術性偽波/人為誤差",
+        features: "Lead I 呈現全盤倒置（P 波、QRS 波群與 T 波均向下）；aVR 導程出現異常的正向 P 波與 R 波（看似正常的 Lead I）。肢體導程 aVL 與 aVF / II 交換，但胸前導程（V1–V6）波形變化完全正常。",
+        vignette: "48歲女性，常規心檢時發現。"
+    },
+    {
+        id: 17, 
+        image: "左束支傳導阻斷.jpg", 
+        tw: "完全性左束支傳導阻斷", 
+        en: "Complete Left Bundle Branch Block (CLBBB)", 
+        category: "傳導異常",
+        features: "QRS 波群寬大（≥ 0.12 秒）。側壁導程（I, aVL, V5–V6）呈現寬大、頂端刷狀或切跡（Notched）的 R 波，且無 q 波；右胸導程（V1–V3）呈現極深的 QS 或 rS 波形，ST-T 方向與 QRS 主波相反。",
+        vignette: "66歲男性，有擴張型心肌病史，因漸進性心衰竭症狀加重就醫。"
+    },
+    {
+        id: 18, 
+        image: "交界性心律之心跳過緩.webp", 
+        tw: "交界性心動過緩 / 房室交界性逸搏心律", 
+        en: "Junctional Bradycardia / Junctional Escape Rhythm", 
+        category: "徐緩性心律不整",
+        features: "心率慢而規律（通常在 40–60 bpm 以下）。由於起搏點來自房室交界區（AV junction），P 波可能倒置（逆行性 P 波）、埋在 QRS 波群中或位於其後，QRS 波群形態維持狹窄正常。",
+        vignette: "75歲女性，因體力衰退、易疲勞及冒冷汗前來求診。"
+    },
+    {
+        id: 19, 
+        image: "前壁心肌梗塞.webp", 
+        tw: "急性前壁心肌梗塞", 
+        en: "Acute Anterior Myocardial Infarction (Anterior STEMI)", 
+        category: "心肌梗塞/缺血",
+        features: "胸前導程 V2–V5 出現大幅度的 ST 段抬高（ST-segment elevation），伴隨 T 波高聳或形成墓碑狀（Tombstoning）改變，V1–V4 亦可見病理性 Q 波形成與 R 波遞增不良（Poor R-wave progression）。",
+        vignette: "57歲男性，突發前胸劇烈壓迫性疼痛伴隨冷汗與嘔吐 1 小時，疼痛轉移至背部與左臂。"
+    },
+    {
+        id: 20, 
+        image: "前壁急性心肌梗塞.webp", 
+        tw: "前壁急性心肌梗塞", 
+        en: "Acute Anterior Myocardial Infarction (Anterior STEMI)", 
+        category: "心肌梗塞/缺血",
+        features: "胸前導程 V1–V3（前間隔至前壁區域）ST 段呈現弓背向上（Convex）抬高，伴隨 T 波倒置與 QS 波型形成，高側壁導程 I、aVL 亦可見輕微 ST 段變化，提示左前降支（LAD）病變。",
+        vignette: "64歲男性，有高血脂與吸菸史，因持續性胸骨下劇痛 3 小時求診。"
+    },
+            {
+        id: 21, 
+        image: "急性心包膜炎A.webp", 
+        tw: "急性心包膜炎", 
+        en: "Acute Pericarditis", 
+        category: "心包膜疾病",
+        features: "廣泛性肢體與胸前導程（I, II, III, aVF, V2-V6）呈現凹面向上（Concave upward）ST 段上升，且伴隨 PR 間期壓低（PR depression）；aVR 導程則呈現鏡像的 ST 段壓低與 PR 間期上升。",
+        vignette: "34歲男性，兩週前曾有上呼吸道病毒感染史，近兩天出現劇烈胸骨下銳痛。疼痛在尖銳吸氣與平躺時顯著加劇，前傾坐起時可獲緩解。"
+    },
+    {
+        id: 22, 
+        image: "急性心包膜炎B.webp", 
+        tw: "急性心包膜炎", 
+        en: "Acute Pericarditis", 
+        category: "心包膜疾病",
+        features: "多數導程（如 II, III, aVF, V2-V6）呈現彌漫性 ST 段抬高與 PR 段往下偏移（PR depression），aVR 導程呈現 PR 段上升。波形不符合單一冠狀動脈解剖供應分佈區，且無病理性 Q 波。",
+        vignette: "29歲女性，因突發性胸痛伴隨低溫發燒前來急診，胸痛特徵為前傾坐姿可減輕疼痛。"
+    },
+    {
+        id: 23, 
+        image: "病竇症候群.webp", 
+        tw: "病竇症候群 / 竇房結功能不良", 
+        en: "Sick Sinus Syndrome (SSS) / Sinus Pause", 
+        category: "徐緩性心律不整",
+        features: "竇性心律中出現長時間的竇性停搏（Sinus pause / arrest）或竇房傳導阻滯，導致無 P-QRS-T 波群出現的長間歇期（長達數秒），且未及時出現交界性或心室性逸搏心律。",
+        vignette: "78歲女性，近幾個月來反覆出現突發性暈厥、眼前發黑與嚴重倦怠。"
+    },
+    {
+        id: 24, 
+        image: "陣發性上心室頻脈A.webp", 
+        tw: "陣發性上心室頻脈", 
+        en: "Paroxysmal Supraventricular Tachycardia (PSVT)", 
+        category: "心房性心律不整",
+        features: "極為規則且極快速的狹窄 QRS 波群頻脈（通常心率 > 150 bpm）。P 波隱沒於前一心搏的 T 波或 QRS 波群末端（形成假 R' 波或假 S 波），顯示為典型的房室結迴路重返型頻脈（AVNRT）。",
+        vignette: "31歲男性，突然感到心臟快速劇烈跳動、胸口不適與呼吸急促。"
+    },
+    {
+        id: 25, 
+        image: "陣發性上心室頻脈B.webp", 
+        tw: "陣發性上心室頻脈", 
+        en: "Paroxysmal Supraventricular Tachycardia (PSVT)", 
+        category: "心房性心律不整",
+        features: "12 導程心電圖顯示極度規則的窄 QRS 波群頻脈（心率約 180–200 bpm）。各導程無法清晰分辨獨立的竇性 P 波，ST 段可能伴隨速率相關性（Rate-related）壓低。",
+        vignette: "25歲女性，在喝完濃縮咖啡後突發強烈心悸、頭暈與噁心感。"
+    },
+    {
+        id: 26, 
+        image: "第二度第二型房室傳導阻斷.webp", 
+        tw: "第二度第二型房室傳導阻滯", 
+        en: "Second-Degree AV Block, Mobitz Type II", 
+        category: "傳導異常",
+        features: "PR 間期保持恆定固定，但在無預警情況下突然出現 P 波無法下傳（P 波後方缺失 QRS 波群）。傳導阻斷點多位於希氏束或雙束支水平，QRS 波群常呈寬大形態。",
+        vignette: "71歲男性，有高血壓與冠心病史，因反覆出現頭暈及近乎暈厥症狀求診。"
+    },
+    {
+        id: 27, 
+        image: "第三度房室傳導阻斷A.webp", 
+        tw: "第三度房室傳導阻滯（完全性房室傳導阻滯）", 
+        en: "Third-Degree (Complete) AV Block", 
+        category: "傳導異常",
+        features: "房室完全解離（AV dissociation）。P-P 間期規則且心房率較快；R-R 間期亦規則但心室率極慢（通常 < 40 bpm）。P 波與 QRS 波群之間完全無關聯，QRS 波群呈現寬大畸形之心室逸搏心律（Ventricular escape rhythm）。",
+        vignette: "80歲女性，因嚴重頭暈、步態不穩及意識模糊由家屬送至急診。"
+    },
+    {
+        id: 28, 
+        image: "第三度房室傳導阻斷B.webp", 
+        tw: "第三度房室傳導阻滯（完全性房室傳導阻滯）", 
+        en: "Third-Degree (Complete) AV Block", 
+        category: "傳導異常",
+        features: "P 波與 QRS 波群之間缺乏傳導關係，P 波頻率（心房率）顯著快於 QRS 波群頻率（心室率）。PR 間期完全變異且無規律，心室搏動由慢而規則的交界性或心室性起搏點維繫。",
+        vignette: "76歲男性，近幾天感到持續性頭重腳輕、無力與全身冒冷汗。"
+    },
+    {
+        id: 29, 
+        image: "第三度房室傳導阻斷C.webp", 
+        tw: "第三度房室傳導阻滯（完全性房室傳導阻滯）", 
+        en: "Third-Degree (Complete) AV Block", 
+        category: "傳導異常",
+        features: "心房波（P 波）與心室波（QRS 波群）各自獨立運作，P-P 間期與 R-R 間期各自規則但互不相干。QRS 波群形態狹窄或寬大，心室率顯著緩慢。",
+        vignette: "83歲男性，有心肌梗塞舊病史，因突發暈厥被送到急診。"
+    },
+    {
+        id: 30, 
+        image: "陳舊型前壁心肌梗塞.webp", 
+        tw: "陳舊性前壁心肌梗塞", 
+        en: "Old (Chronic) Anterior Myocardial Infarction", 
+        category: "心肌梗塞/缺血",
+        features: "前壁及胸前導程（V1–V4）出現顯著的病理性 Q 波（Pathological Q waves）或 QS 波型，伴隨 R 波遞增不良（Poor R-wave progression）。ST 段已恢復至等電位線，但 T 波可能持續平坦或倒置。",
+        vignette: "67歲男性，三年前曾患急性前壁心肌梗塞並接受過冠狀動脈支架置放術，目前於門診例行追蹤。"
+    },
+           {
+        id: 31, 
+        image: "頻脈緩脈徵候群.webp", 
+        tw: "頻脈-徐緩綜合徵 / 慢快綜合徵", 
+        en: "Tachycardia-Bradycardia Syndrome (Tachy-Brady Syndrome)", 
+        category: "徐緩性心律不整",
+        features: "為病竇症候群（SSS）的一種表現。心電圖特徵為快速性上心室心律不整（如心房顫動、心房撲動或陣發性上心室頻脈）突然終止時，竇房結無法及時復甦，導致出現顯著的長間歇期（Sinus pause / Arrest）與顯著的心動過緩。",
+        vignette: "75歲男性，近來交替出現劇烈心悸與突然的頭暈、眼前發黑及近乎暈厥狀況。"
+    },
+    {
+        id: 32, 
+        image: "竇性心律不整.webp", 
+        tw: "竇性心律不整", 
+        en: "Sinus Arrhythmia", 
+        category: "竇性心律",
+        features: "具有正常的竇性 P 波形態（II、aVF 呈正向），PR 間期正常。主要特徵為 P-P（或 R-R）間期不規則，最長與最短間期相差 > 0.16 秒（或 > 10%），常與呼吸週期相關（吸氣時心率加快，呼氣時心率變慢）。",
+        vignette: "22歲健康男性大學生，於體檢時紀錄心電圖。"
+    },
+    {
+        id: 33, 
+        image: "竇性頻脈A.webp", 
+        tw: "竇性心動過速", 
+        en: "Sinus Tachycardia", 
+        category: "竇性心律",
+        features: "心率超過 100 bpm（通常在 100–160 bpm 之間）。每一個 QRS 波群前均有形態正常的竇性 P 波（在 Lead II, aVF 正向，aVR 倒置），P-P 及 R-R 間期規則且 QRS 波群維持狹窄。",
+        vignette: "30歲女性，因急性發燒至 38.8°C 併發全身酸痛與輕微心悸至急診。"
+    },
+    {
+        id: 34, 
+        image: "竇性頻脈B.webp", 
+        tw: "竇性心動過速", 
+        en: "Sinus Tachycardia", 
+        category: "竇性心律",
+        features: "節律極規律且速率增快（心率 > 100 bpm）。在極高心率下，P 波可能緊貼於前一心搏之 T 波末端，但仍可識別出獨立且形態正常的竇性 P 波與狹窄 QRS 波群組合。",
+        vignette: "24歲男性，在完成 5 公里長跑後感到心跳加速、呼吸急促。"
+    }
+        ];
+
+        // 圖檔相對路徑 Base Path
+        const IMAGE_BASE_PATH = "./PIC/";
+
+        // 系統全局狀態 State
+        let currentTab = 'study';
+        let selectedCategory = 'ALL';
+        let currentQuizIndex = 0;
+        let score = 0;
+        let streak = 0;
+        let maxStreak = 0;
+        let quizPool = [];
+        let timerInterval = null;
+        let timeLeft = 20;
+        let userMistakes = []; // 儲存錯題 ID List
+
+        // 頁面初始化
+        document.addEventListener("DOMContentLoaded", () => {
+            loadMistakesFromStorage();
+            document.getElementById("total-count").innerText = ecgData.length;
+            buildCategoryPills();
+            renderStudyCards(ecgData);
+            updateGlobalStats();
+            initQuiz();
+        });
+
+        // 讀取 localStorage 錯題本
+        function loadMistakesFromStorage() {
+            const stored = localStorage.getItem("ecg_user_mistakes");
+            if (stored) {
+                try {
+                    userMistakes = JSON.parse(stored);
+                } catch (e) {
+                    userMistakes = [];
+                }
+            }
+        }
+
+        // 儲存錯題本
+        function saveMistakesToStorage() {
+            localStorage.setItem("ecg_user_mistakes", JSON.stringify(userMistakes));
+            updateGlobalStats();
+        }
+
+        // 更新 Header 全局統計
+        function updateGlobalStats() {
+            document.getElementById("stat-max-streak").innerText = maxStreak;
+            document.getElementById("stat-mistakes-count").innerText = userMistakes.length;
+            
+            const badge = document.getElementById("badge-mistake-count");
+            if (userMistakes.length > 0) {
+                badge.innerText = userMistakes.length;
+                badge.classList.remove("hidden");
+            } else {
+                badge.classList.add("hidden");
+            }
+        }
+
+        // 頁面 Tab 切換
+        function switchTab(mode) {
+            currentTab = mode;
+            const studySec = document.getElementById("study-section");
+            const quizSec = document.getElementById("quiz-section");
+            const mistakesSec = document.getElementById("mistakes-section");
+
+            const btnStudy = document.getElementById("btn-study-mode");
+            const btnQuiz = document.getElementById("btn-quiz-mode");
+            const btnMistakes = document.getElementById("btn-mistakes-mode");
+
+            // Hide All
+            studySec.classList.add("hidden");
+            quizSec.classList.add("hidden");
+            mistakesSec.classList.add("hidden");
+
+            // Reset Button Styles
+            [btnStudy, btnQuiz, btnMistakes].forEach(btn => {
+                btn.className = "px-3.5 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2 text-slate-400 hover:text-white";
+            });
+
+            if (mode === 'study') {
+                studySec.classList.remove("hidden");
+                btnStudy.className = "px-3.5 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-teal-600 text-white shadow-sm";
+            } else if (mode === 'quiz') {
+                quizSec.classList.remove("hidden");
+                btnQuiz.className = "px-3.5 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-teal-600 text-white shadow-sm";
+            } else if (mode === 'mistakes') {
+                mistakesSec.classList.remove("hidden");
+                btnMistakes.className = "px-3.5 py-1.5 rounded-lg text-sm font-medium transition flex items-center space-x-2 bg-rose-600 text-white shadow-sm";
+                renderMistakesCards();
+            }
+        }
+
+        // 動態建立分類篩選膠囊 (Category Pills)
+        function buildCategoryPills() {
+            const categories = ['ALL', ...new Set(ecgData.map(d => d.category))];
+            const container = document.getElementById("category-pills");
+            container.innerHTML = "";
+
+            categories.forEach(cat => {
+                const btn = document.createElement("button");
+                btn.className = `px-3 py-1 rounded-full text-xs font-medium transition border ${
+                    cat === 'ALL' 
+                    ? 'bg-teal-500/20 text-teal-300 border-teal-500/40' 
+                    : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
+                }`;
+                btn.innerText = cat === 'ALL' ? '全部類別' : cat;
+                btn.onclick = () => filterByCategory(cat, btn);
+                container.appendChild(btn);
+            });
+        }
+
+        function filterByCategory(cat, btnElement) {
+            selectedCategory = cat;
+            const buttons = document.querySelectorAll("#category-pills button");
+            buttons.forEach(b => {
+                b.className = "px-3 py-1 rounded-full text-xs font-medium transition border bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500";
+            });
+            btnElement.className = "px-3 py-1 rounded-full text-xs font-medium transition border bg-teal-500/20 text-teal-300 border-teal-500/40";
+            filterStudyCards();
+        }
+
+        // 渲染學習模式卡片 (包含判讀焦點)
+        function renderStudyCards(data) {
+            const grid = document.getElementById("study-grid");
+            grid.innerHTML = "";
+
+            if (data.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-12 text-slate-500">查無符合條件的心電圖資料</div>`;
+                return;
+            }
+
+            data.forEach(item => {
+                const card = document.createElement("div");
+                card.className = "bg-slate-800/80 rounded-2xl overflow-hidden border border-slate-700/80 flex flex-col hover:border-teal-500/50 transition duration-300 shadow-md group";
+                card.innerHTML = `
+                    <div class="relative bg-slate-950 p-2 flex items-center justify-center h-48 cursor-pointer overflow-hidden ecg-grid-bg" onclick="openModal('${IMAGE_BASE_PATH}${item.image}', '${item.tw}', '${item.features}')">
+                        <img src="${IMAGE_BASE_PATH}${item.image}" alt="${item.tw}" class="max-h-full object-contain group-hover:scale-105 transition duration-300" onerror="this.src='https://placehold.co/400x200/1e293b/94a3b8?text=ECG+Image+NotFound'">
+                        <span class="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                            ${item.category}
+                        </span>
+                    </div>
+                    <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
+                        <div>
+                            <h2 class="text-base font-bold text-white flex items-center justify-between">
+                                <span>${item.tw}</span>
+                            </h2>
+                            <p class="text-xs text-slate-400 font-mono mt-0.5">${item.en}</p>
+                        </div>
+                        
+                        <!-- 核心判讀重點提示 -->
+                        <div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/60 text-xs text-slate-300 space-y-1">
+                            <span class="text-teal-400 font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-bolt text-[10px]"></i> 判讀特徵:
+                            </span>
+                            <p class="line-clamp-2 leading-relaxed text-slate-300">${item.features}</p>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-700/60 flex justify-between items-center text-xs text-slate-400">
+                            <span class="truncate max-w-[180px] text-[11px]">檔名: ${item.image}</span>
+                            <button onclick="openModal('${IMAGE_BASE_PATH}${item.image}', '${item.tw}', '${item.features}')" class="text-teal-400 hover:text-teal-300 font-medium flex items-center gap-1">
+                                <i class="fa-solid fa-expand"></i>詳細特徵
+                            </button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // 搜尋與篩選邏輯
+        function filterStudyCards() {
+            const query = document.getElementById("search-input").value.toLowerCase();
+            const filtered = ecgData.filter(item => {
+                const matchQuery = item.tw.toLowerCase().includes(query) || 
+                                   item.en.toLowerCase().includes(query) || 
+                                   item.features.toLowerCase().includes(query);
+                const matchCat = selectedCategory === 'ALL' || item.category === selectedCategory;
+                return matchQuery && matchCat;
+            });
+            renderStudyCards(filtered);
+        }
+
+
+        // ================= 測驗與遊戲化邏輯 =================
+
+        function initQuiz(customPool = null) {
+            clearInterval(timerInterval);
+            quizPool = customPool ? [...customPool] : [...ecgData].sort(() => Math.random() - 0.5);
+            currentQuizIndex = 0;
+            score = 0;
+            streak = 0;
+            document.getElementById("quiz-score").innerText = score;
+            document.getElementById("quiz-streak-count").innerText = streak;
+            document.getElementById("streak-container").classList.add("hidden");
+            loadQuestion();
+        }
+
+        function loadQuestion() {
+            clearInterval(timerInterval);
+            if (quizPool.length === 0) return;
+
+            const item = quizPool[currentQuizIndex];
+            document.getElementById("quiz-current-num").innerText = `${currentQuizIndex + 1} / ${quizPool.length}`;
+            document.getElementById("quiz-image").src = IMAGE_BASE_PATH + item.image;
+            document.getElementById("quiz-scenario").innerText = item.vignette;
+
+            // 產生干擾選項 (1正確 + 3隨機錯誤)
+            const distractors = ecgData
+                .filter(d => d.tw !== item.tw)
+                .sort(() => Math.random() - 0.5)
+                .slice(0, 3);
+            
+            const options = [...distractors, item].sort(() => Math.random() - 0.5);
+
+            const optionsContainer = document.getElementById("quiz-options");
+            optionsContainer.innerHTML = "";
+
+            options.forEach(opt => {
+                const btn = document.createElement("button");
+                btn.className = "w-full p-3.5 text-left rounded-xl bg-slate-900/80 border border-slate-700/80 hover:border-teal-500 hover:bg-teal-500/10 transition font-medium text-slate-200 text-sm option-btn flex items-center justify-between group";
+                btn.innerHTML = `
+                    <span>${opt.tw} <span class="text-xs text-slate-400 block md:inline font-mono">(${opt.en})</span></span>
+                    <i class="fa-regular fa-circle text-slate-600 group-hover:text-teal-400"></i>
+                `;
+                btn.onclick = () => checkAnswer(btn, opt.tw === item.tw, item);
+                optionsContainer.appendChild(btn);
+            });
+
+            // 重置 UI 狀態
+            const feedback = document.getElementById("quiz-feedback");
+            feedback.className = "hidden p-5 rounded-xl space-y-3 transition border";
+            
+            const nextBtn = document.getElementById("btn-next-question");
+            nextBtn.disabled = true;
+            nextBtn.classList.add("opacity-50", "cursor-not-allowed");
+
+            // 啟動倒數計時器 (20秒)
+            startTimer(item);
+        }
+
+        // 計時器邏輯
+        function startTimer(currentItem) {
+            timeLeft = 60;
+            const timerDisplay = document.getElementById("quiz-timer");
+            timerDisplay.innerText = `${timeLeft}s`;
+            timerDisplay.className = "font-mono font-bold text-teal-300";
+
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.innerText = `${timeLeft}s`;
+
+                if (timeLeft <= 5) {
+                    timerDisplay.className = "font-mono font-bold text-rose-400 animate-pulse";
+                }
+
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    // 超時自動視為答錯
+                    handleTimeout(currentItem);
+                }
+            }, 1000);
+        }
+
+        // 超時處理
+        function handleTimeout(item) {
+            disableAllOptionButtons();
+            recordMistake(item.id);
+
+            streak = 0;
+            document.getElementById("streak-container").classList.add("hidden");
+
+            const feedback = document.getElementById("quiz-feedback");
+            feedback.classList.remove("hidden");
+            feedback.className = "p-5 rounded-xl space-y-2 border bg-amber-500/10 border-amber-500/30 text-amber-300";
+
+            document.getElementById("quiz-feedback-title").innerHTML = `<i class="fa-solid fa-hourglass-end text-amber-400"></i> 作答超時！`;
+            document.getElementById("quiz-feedback-explain").innerHTML = `正確答案為：<strong>${item.tw} (${item.en})</strong><br><br><strong>判讀要點：</strong>${item.features}`;
+
+            enableNextButton();
+        }
+
+        // 檢查答案
+        function checkAnswer(selectedBtn, isCorrect, item) {
+            clearInterval(timerInterval);
+            disableAllOptionButtons();
+
+            const feedback = document.getElementById("quiz-feedback");
+            feedback.classList.remove("hidden");
+
+            const feedbackTitle = document.getElementById("quiz-feedback-title");
+            const feedbackExplain = document.getElementById("quiz-feedback-explain");
+
+            if (isCorrect) {
+                selectedBtn.className = "w-full p-3.5 text-left rounded-xl bg-emerald-500/20 border-2 border-emerald-500 text-emerald-200 font-medium text-sm flex items-center justify-between";
+                selectedBtn.querySelector("i").className = "fa-solid fa-circle-check text-emerald-400";
+
+                feedback.className = "p-5 rounded-xl space-y-2 border bg-emerald-500/10 border-emerald-500/30 text-emerald-300";
+                feedbackTitle.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i> 回答正確！ (+10 分)`;
+
+                score += 10;
+                streak++;
+                if (streak > maxStreak) {
+                    maxStreak = streak;
+                }
+
+                // 觸發連勝效果
+                if (streak >= 2) {
+                    const streakContainer = document.getElementById("streak-container");
+                    document.getElementById("quiz-streak-count").innerText = streak;
+                    streakContainer.classList.remove("hidden");
+                    streakContainer.classList.add("flex");
+                }
+
+                document.getElementById("quiz-score").innerText = score;
+
+            } else {
+                selectedBtn.className = "w-full p-3.5 text-left rounded-xl bg-rose-500/20 border-2 border-rose-500 text-rose-200 font-medium text-sm flex items-center justify-between";
+                selectedBtn.querySelector("i").className = "fa-solid fa-circle-xmark text-rose-400";
+
+                feedback.className = "p-5 rounded-xl space-y-2 border bg-rose-500/10 border-rose-500/30 text-rose-300";
+                feedbackTitle.innerHTML = `<i class="fa-solid fa-circle-xmark text-rose-400"></i> 回答錯誤！`;
+
+                // 答錯加入錯題庫
+                recordMistake(item.id);
+
+                // 重置 Streak
+                streak = 0;
+                document.getElementById("streak-container").classList.add("hidden");
+            }
+
+            feedbackExplain.innerHTML = `<strong>正確答案：</strong> ${item.tw} (${item.en})<br><br><strong>核心特徵解析：</strong> ${item.features}`;
+
+            updateGlobalStats();
+            enableNextButton();
+        }
+
+        function disableAllOptionButtons() {
+            const allBtns = document.querySelectorAll(".option-btn");
+            allBtns.forEach(btn => {
+                btn.disabled = true;
+                btn.classList.add("cursor-default", "opacity-80");
+            });
+        }
+
+        function enableNextButton() {
+            const nextBtn = document.getElementById("btn-next-question");
+            nextBtn.disabled = false;
+            nextBtn.classList.remove("opacity-50", "cursor-not-allowed");
+        }
+
+        // 記錄錯題
+        function recordMistake(id) {
+            if (!userMistakes.includes(id)) {
+                userMistakes.push(id);
+                saveMistakesToStorage();
+            }
+        }
+
+        // 下一題
+        function nextQuestion() {
+            if (currentQuizIndex < quizPool.length - 1) {
+                currentQuizIndex++;
+                loadQuestion();
+            } else {
+                // 測驗結束慶祝
+                if (typeof confetti === 'function') {
+                    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                }
+                alert(`🎉 測驗完成！\n您的總得分為：${score} 分\n最高連續答對：${streak} 題`);
+                initQuiz();
+            }
+        }
+
+        function resetQuiz() {
+            initQuiz();
+        }
+
+
+        // ================= 3. 錯題專區邏輯 =================
+
+        function renderMistakesCards() {
+            const grid = document.getElementById("mistakes-grid");
+            const btnQuizMistakes = document.getElementById("btn-quiz-mistakes");
+            grid.innerHTML = "";
+
+            const mistakeItems = ecgData.filter(d => userMistakes.includes(d.id));
+
+            if (mistakeItems.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-16 text-slate-500 bg-slate-800/40 rounded-2xl border border-slate-700/50">
+                    <i class="fa-solid fa-circle-check text-4xl text-teal-400 mb-3 block"></i>
+                    尚未有錯題紀錄，繼續保持！
+                </div>`;
+                btnQuizMistakes.disabled = true;
+                return;
+            }
+
+            btnQuizMistakes.disabled = false;
+
+            mistakeItems.forEach(item => {
+                const card = document.createElement("div");
+                card.className = "bg-slate-800/80 rounded-2xl overflow-hidden border border-rose-500/30 flex flex-col shadow-md";
+                card.innerHTML = `
+                    <div class="relative bg-slate-950 p-2 flex items-center justify-center h-44 ecg-grid-bg">
+                        <img src="${IMAGE_BASE_PATH}${item.image}" alt="${item.tw}" class="max-h-full object-contain">
+                    </div>
+                    <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
+                        <div>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">需要複習</span>
+                            <h3 class="text-base font-bold text-white mt-1">${item.tw}</h3>
+                            <p class="text-xs text-slate-400 font-mono">${item.en}</p>
+                        </div>
+                        <div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/60 text-xs text-slate-300">
+                            <span class="text-teal-400 font-semibold">特徵重點：</span>
+                            <p class="mt-0.5 leading-relaxed text-slate-300">${item.features}</p>
+                        </div>
+                        <div class="pt-2 border-t border-slate-700/60 flex justify-end">
+                            <button onclick="removeMistake(${item.id})" class="text-xs text-slate-400 hover:text-rose-400 transition flex items-center gap-1">
+                                <i class="fa-solid fa-trash"></i> 移出錯題庫
+                            </button>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function removeMistake(id) {
+            userMistakes = userMistakes.filter(mId => mId !== id);
+            saveMistakesToStorage();
+            renderMistakesCards();
+        }
+
+        function clearMistakes() {
+            if (confirm("確定要清空所有的錯題紀錄嗎？")) {
+                userMistakes = [];
+                saveMistakesToStorage();
+                renderMistakesCards();
+            }
+        }
+
+        function startMistakesQuiz() {
+            const mistakeItems = ecgData.filter(d => userMistakes.includes(d.id));
+            if (mistakeItems.length > 0) {
+                switchTab('quiz');
+                initQuiz(mistakeItems);
+            }
+        }
+
+
+        // Modal Operations
+        function openModal(src, title = "心電圖細節檢視", features = "") {
+            document.getElementById("modal-img").src = src;
+            document.getElementById("modal-title").innerText = title;
+            
+            const featureBox = document.getElementById("modal-features-box");
+            if (features) {
+                document.getElementById("modal-features-text").innerText = features;
+                featureBox.classList.remove("hidden");
+            } else {
+                featureBox.classList.add("hidden");
+            }
+
+            document.getElementById("image-modal").classList.remove("hidden");
+        }
+
+        function closeModal() {
+            document.getElementById("image-modal").classList.add("hidden");
+        }
+    </script>
+</body>
+</html>
